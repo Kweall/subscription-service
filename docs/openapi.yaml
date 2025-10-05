@@ -1,0 +1,249 @@
+openapi: 3.0.3
+info:
+  title: Subscriptions API
+  version: "1.0.0"
+  description: API for managing user online subscriptions (CRUDL + total cost for a period).
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+
+  /subscriptions:
+    post:
+      summary: Create subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              description: URL of created resource
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+    get:
+      summary: List subscriptions
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Optional filter by user id
+        - name: service_name
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+
+  /subscriptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get subscription by id
+      responses:
+        "200":
+          description: Subscription object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        "200":
+          description: Updated subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete subscription
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /subscriptions/total:
+    get:
+      summary: Total subscription cost for a period (filters optional)
+      description: >
+        Compute total price (integer rubles) of subscriptions whose (start_date..end_date)
+        interval overlaps the provided period. `from` and `to` are inclusive and must be in format YYYY-MM-DD.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start of period (YYYY-MM-DD)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End of period (YYYY-MM-DD)
+        - name: user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Optional user id filter
+        - name: service_name
+          in: query
+          schema:
+            type: string
+          description: Optional service name filter
+      responses:
+        "200":
+          description: Total cost
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total cost in rubles
+                example:
+                  total: 1497
+        "400":
+          description: Invalid request (missing/invalid params)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        price:
+          type: integer
+          description: price in whole rubles (no kopeks)
+        user_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          description: Month and year (first day of month). Format used in API bodies is MM-YYYY.
+          example: "07-2025"
+        end_date:
+          type: string
+          nullable: true
+          description: Month and year, optional. Format MM-YYYY or computed as start_date + 30 days if omitted.
+          example: "08-2025"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, service_name, price, user_id, start_date, created_at, updated_at]
+
+    CreateSubscriptionRequest:
+      type: object
+      properties:
+        service_name:
+          type: string
+        price:
+          type: integer
+          description: integer rubles
+        user_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          description: Month-Year in format MM-YYYY
+          pattern: "^[0-1][0-9]-[0-9]{4}$"
+          example: "07-2025"
+        end_date:
+          type: string
+          description: Optional month-year MM-YYYY; if omitted service will set it to start_date + 30 days
+          pattern: "^[0-1][0-9]-[0-9]{4}$"
+          nullable: true
+      required:
+        - service_name
+        - price
+        - user_id
+        - start_date
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      example:
+        error: "not found"

@@ -1,0 +1,51 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: subscriptions_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  migrate:
+    image: migrate/migrate:v4.15.2
+    command: >
+      -path=/migrations -database "postgres://postgres:postgres@db:5432/subscriptions_db?sslmode=disable" up
+    volumes:
+      - ./internal/migrations:/migrations
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT}:8080"
+    volumes:
+      - .:/app
+      
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    ports:
+      - "8081:8080"
+    environment:
+      - SWAGGER_JSON=/tmp/openapi.yaml
+    volumes:
+      - ./docs/openapi.yaml:/tmp/openapi.yaml:ro
+volumes:
+  db_data:
